@@ -1,0 +1,247 @@
+#!/bin/bash
+# aws-ddns - dynamic DNS for Amazon AWS Route 53
+
+NAME="aws-ddns"
+RDNN="com.bradleysepos.${NAME}"
+VERSION="0.1.0"
+
+set -e
+set -u
+
+SELF="${0}"
+SELF_NAME=$(basename "${SELF}")
+SELF_NAME_SPACING=$(for N in $(seq 1 "${#SELF_NAME}"); do echo -n " "; done)
+HELP="\
+usage: ${SELF_NAME} [-hv]
+       ${SELF_NAME} [-f] hosted-zone-id record-set-name
+       ${SELF_NAME} [-f] [-i ip-provider[,...]] [-l local-cache-prefix]
+       ${SELF_NAME_SPACING} [-m comment] [-r record-type] [-t ttl]
+       ${SELF_NAME_SPACING} hosted-zone-id record-set-name
+where:
+   -h  display this help text
+   -v  display version information
+   -f  query AWS (ignore local cache) and force update if external IP differs
+   -i  external IP address provider url(s) (must return plain text)
+   -l  local cache prefix (default ~/.aws-ddns)
+   -m  record set comment (default ${NAME} datetime UTC)
+   -r  record type (default A)
+   -t  time to live in seconds (default 300)"
+
+# Logs error message and exits
+function exit_with_error {
+    set +e
+    ERROR="${2}"
+    echo "${SELF_NAME}: ${ERROR}" >&2
+    syslog -s -l error "${SELF_NAME}: ${ERROR}" >/dev/null
+    PRINT_HELP="${3:-false}"
+    if [[ "${PRINT_HELP}" == true ]]; then
+        echo -e "${HELP}"
+    fi
+    exit "${1}"
+}
+
+# Arguments
+QUERY_REMOTE=false
+IP_PROVIDERS=('https://api.ipify.org' 'https://wtfismyip.com/text' 'https://icanhazip.com')
+CACHE_PREFIX="${HOME}/."
+COMMENT="${NAME} $(TZ=UTC date '+%Y-%m-%d-%H%M%S') UTC"
+RECORD_TYPE="A"
+TTL="300"
+OPTIND=1
+while getopts ":hvfi:l:m:r:t:" OPT; do
+    case "${OPT}" in
+        h)
+            # Print help and exit
+            echo -e "${HELP}"
+            exit 0
+            ;;
+        v)
+            # Print version and exit
+            echo -e "${VERSION}"
+            exit 0
+            ;;
+        f)
+            # Force update if external IP differs from remote record (ignore local cache)
+            QUERY_REMOTE=true
+            ;;
+        i)
+            # External IP provider url(s)
+            IP_PROVIDERS=($(echo "${OPTARG}" | sed 's/,/ /g'))
+            ;;
+        l)
+            # Local cache prefix
+            CACHE_PREFIX="${OPTARG}"
+            ;;
+        m)
+            # Record set comment
+            COMMENT="${OPTARG}"
+            ;;
+        r)
+            # IP providers
+            RECORD_TYPE="${OPTARG}"
+            ;;
+        t)
+            # IP providers
+            TTL="${OPTARG}"
+            ;;
+        :)
+            # Option without required argument
+            exit_with_error 1 "${SELF_NAME}: option -${OPTARG} requires a value" true
+            ;;
+        \?)
+            # Invalid option specified
+            exit_with_error 1 "${SELF_NAME}: invalid option: -${OPTARG}" true
+            ;;
+    esac
+done
+shift $((${OPTIND} - 1))
+ZONE_ID="${1:-}"
+RECORD_SET="${2:-}"
+
+# Sanity checks
+if [[ "${ZONE_ID}" == "" ]]; then
+    exit_with_error 1 "Hosted Zone ID not specified." true
+fi
+if [[ "${RECORD_SET}" == "" ]]; then
+    exit_with_error 1 "Record set name not specified." true
+fi
+if [[ "${RECORD_TYPE}" != "A" ]]; then
+    exit_with_error 1 "Record type ${RECORD_TYPE} not implemented." true
+fi
+if ! echo "${TTL}" | grep -E '^[0-9]+$' >/dev/null 2>&1; then
+    exit_with_error 1 "TTL must be a number." true
+fi
+
+# Sanitize record set name
+if [[ "${RECORD_SET: -1}" != "." ]]; then
+    RECORD_SET+="."
+fi
+
+# Create/verify local cache
+CACHE_DIR="${CACHE_PREFIX}${NAME}/${ZONE_ID}/${RECORD_SET}"
+CACHE_FILE="${CACHE_DIR}/cache.txt"
+LOG_FILE="${CACHE_DIR}/aws.log"
+if [[ ! -d "${CACHE_DIR}" ]]; then
+    mkdir -p "${CACHE_DIR}" >/dev/null 2>&1
+fi
+if [[ ! -e "${CACHE_FILE}" ]]; then
+    touch "${CACHE_FILE}" >/dev/null 2>&1
+fi
+if [[ ! -e "${LOG_FILE}" ]]; then
+    touch "${LOG_FILE}" >/dev/null 2>&1
+fi
+if [[ ! -d "${CACHE_DIR}" ]]     \
+   || [[ ! -r "${CACHE_FILE}" ]] \
+   || [[ ! -w "${CACHE_FILE}" ]] \
+   || [[ ! -r "${LOG_FILE}" ]]   \
+   || [[ ! -w "${LOG_FILE}" ]]
+then
+    exit_with_error 1 "Unable to create/verify local cache."
+fi
+
+# Get external IP address
+IP=""
+for PROVIDER in "${IP_PROVIDERS[@]}"; do
+    # Query provider
+    IP_TEMP=$(curl -s "${PROVIDER}" 2>/dev/null | head -n 1)
+    # Check result
+    if [[ "${IP_TEMP}" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+        IP_TEMP_OCTETS=($(echo "${IP_TEMP}" | sed 's/\./ /g'))
+        # Exclude out of range
+        for OCTET in "${IP_TEMP_OCTETS[@]}"; do
+            if [[ ! "${OCTET}" -le 255 ]]; then
+                continue 2
+            fi
+        done
+        # Exclude private/internal range
+        if [[ "${IP_TEMP}" =~ ^127[.] ]]             \
+           || [[ "${IP_TEMP}" =~ ^10[.] ]]           \
+           || [[ "${IP_TEMP}" =~ ^172[.]1[6-9][.] ]] \
+           || [[ "${IP_TEMP}" =~ ^172[.]2[0-9][.] ]] \
+           || [[ "${IP_TEMP}" =~ ^172[.]3[0-1][.] ]] \
+           || [[ "${IP_TEMP}" =~ ^192[.]168[.] ]]
+        then
+            continue 2
+        fi
+        # IP seems valid
+        IP="${IP_TEMP}"
+        break
+    fi
+done
+if [[ "${IP}" == "" ]]; then
+    exit_with_error 1 "Unable to determine external IP address."
+fi
+
+# Check whether update is necessary
+IP_CURRENT=""
+TTL_CURRENT=""
+if [[ "${QUERY_REMOTE}" == true ]]; then
+    RESULT=$(aws route53 list-resource-record-sets --hosted-zone "${ZONE_ID}" --starting-token "${RECORD_SET}" --max-items 1 2>/dev/null)
+    if [[ "$?" -eq 0 ]]; then
+        IP_CURRENT=$(echo "${RESULT}" | grep -E '^RESOURCERECORDS[^A-Z]' | awk '{ print $2 }' 2>&1)
+        TTL_CURRENT=$(echo "${RESULT}" | grep -E '^RESOURCERECORDSETS' | awk '{ print $3 }' 2>&1)
+    else
+        exit_with_error 1 "Unable to query AWS."
+    fi
+else
+    RESULT=($(cat "${CACHE_FILE}" 2>/dev/null | head -n 1))
+    if [[ "$?" -eq 0 ]]; then
+        if [[ "${#RESULT[@]}" -gt 0 ]]; then
+            IP_CURRENT="${RESULT[0]}"
+            TTL_CURRENT="${RESULT[1]}"
+        fi
+    else
+        exit_with_error 1 "Unable to query local cache."
+    fi
+fi
+if [[ "${IP_CURRENT}" == "${IP}" ]] && [[ "${TTL_CURRENT}" == "${TTL}" ]]; then
+    # Already up to date
+    echo "Already up to date."
+    # Cache IP address
+    echo "${IP} ${TTL}" > "${CACHE_FILE}"
+    # Done
+    exit 0
+fi
+
+# Digest for AWS
+set +e
+read -r -d '' DIGEST << EndDigest
+{
+    "HostedZoneId": "${ZONE_ID}", 
+    "ChangeBatch": {
+        "Comment": "${COMMENT}",
+        "Changes": [
+            {
+                "Action": "UPSERT",
+                "ResourceRecordSet": {
+                "ResourceRecords": [
+                    {
+                    "Value": "${IP}"
+                    }
+                ],
+                "Name": "${RECORD_SET}",
+                "Type": "${RECORD_TYPE}",
+                "TTL": ${TTL}
+                }
+            }
+        ]
+    }
+}
+EndDigest
+set -e
+
+# Push changes
+if ! aws route53 change-resource-record-sets --cli-input-json "${DIGEST}" >> "${LOG_FILE}" 2>&1; then
+    rm "${DIGEST}" >/dev/null 2>&1
+    exit_with_error 1 "AWS returned an error, log at ${LOG_FILE}"
+fi
+echo "${IP} ${TTL}" > "${CACHE_FILE}"
+
+# Trim log
+LOG_LINES=$(wc -l "${LOG_FILE}" | awk '{ print $1 }')
+if [[ "${LOG_LINES}" -gt 100 ]]; then
+    tail -n 100 "${LOG_FILE}" > "${LOG_FILE}"
+fi
+
+# Done
+exit 0
