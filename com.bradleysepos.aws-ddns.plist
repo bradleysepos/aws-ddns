@@ -6,7 +6,7 @@
         <string>com.bradleysepos.aws-ddns</string>
     <key>ProgramArguments</key>
     <array>
-        <string>aws-ddns</string>
+        <string>/usr/local/bin/aws-ddns</string>
         <string>YOUR-HOSTED-ZONE-ID</string>
         <string>your.domain.tld.</string>
     </array>
