@@ -1,5 +1,8 @@
 #!/bin/bash
 # aws-ddns - dynamic DNS for Amazon AWS Route 53
+#
+# Copyright 2015 Bradley Sepos
+# Released under the MIT License. See LICENSE for details.
 
 NAME="aws-ddns"
 RDNN="com.bradleysepos.${NAME}"
