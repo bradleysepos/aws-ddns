@@ -21,7 +21,6 @@ Installation
 
 ```
 launchctl load ~/Library/LaunchAgents/com.bradleysepos.aws-ddns.plist
-launchctl start com.bradleysepos.aws-ddns
 ```
 
 
