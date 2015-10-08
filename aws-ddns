@@ -60,7 +60,7 @@ while getopts ":hvfi:l:m:r:t:" OPT; do
             ;;
         v)
             # Print version and exit
-            echo -e "${VERSION}"
+            echo "${NAME} ${VERSION}"
             exit 0
             ;;
         f)
