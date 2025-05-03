@@ -18,7 +18,7 @@ HELP="\
 usage: ${SELF_NAME} [-hv]
        ${SELF_NAME} [-f] hosted-zone-id record-set-name
        ${SELF_NAME} [-f] [-i ip-provider[,...]] [-l local-cache-prefix]
-       ${SELF_NAME_SPACING} [-m comment] [-r record-type] [-t ttl]
+       ${SELF_NAME_SPACING} [-m comment] [-p profile] [-r record-type] [-t ttl]
        ${SELF_NAME_SPACING} hosted-zone-id record-set-name
 where:
    -h  display this help text
@@ -27,6 +27,7 @@ where:
    -i  external IP address provider url(s) (must return plain text)
    -l  local cache prefix (default ~/.aws-ddns)
    -m  record set comment (default ${NAME} datetime UTC)
+   -p  AWS CLI profile (default default)
    -r  record type (default A)
    -t  time to live in seconds (default 300)"
 
@@ -48,10 +49,11 @@ QUERY_REMOTE=false
 IP_PROVIDERS=('https://api.ipify.org' 'https://wtfismyip.com/text' 'https://icanhazip.com')
 CACHE_PREFIX="${HOME}/."
 COMMENT="${NAME} $(TZ=UTC date '+%Y-%m-%d-%H%M%S') UTC"
+PROFILE="default"
 RECORD_TYPE="A"
 TTL="300"
 OPTIND=1
-while getopts ":hvfi:l:m:r:t:" OPT; do
+while getopts ":hvfi:l:m:p:r:t:" OPT; do
     case "${OPT}" in
         h)
             # Print help and exit
@@ -78,6 +80,10 @@ while getopts ":hvfi:l:m:r:t:" OPT; do
         m)
             # Record set comment
             COMMENT="${OPTARG}"
+            ;;
+        p)
+            # AWS CLI profile
+            PROFILE="${OPTARG}"
             ;;
         r)
             # IP providers
@@ -179,7 +185,7 @@ fi
 IP_CURRENT=""
 TTL_CURRENT=""
 if [[ "${QUERY_REMOTE}" == true ]]; then
-    RESULT=$(aws route53 list-resource-record-sets --hosted-zone "${ZONE_ID}" --starting-token "${RECORD_SET}" --max-items 1 2>/dev/null)
+    RESULT=$(aws --profile="${PROFILE}" route53 list-resource-record-sets --hosted-zone "${ZONE_ID}" --starting-token "${RECORD_SET}" --max-items 1 2>/dev/null)
     if [[ "$?" -eq 0 ]]; then
         IP_CURRENT=$(echo "${RESULT}" | grep -E '^RESOURCERECORDS[^A-Z]' | awk '{ print $2 }' 2>&1)
         TTL_CURRENT=$(echo "${RESULT}" | grep -E '^RESOURCERECORDSETS' | awk '{ print $3 }' 2>&1)
@@ -234,7 +240,7 @@ EndDigest
 set -e
 
 # Push changes
-if ! aws route53 change-resource-record-sets --cli-input-json "${DIGEST}" >> "${LOG_FILE}" 2>&1; then
+if ! aws --profile="${PROFILE}" route53 change-resource-record-sets --cli-input-json "${DIGEST}" >> "${LOG_FILE}" 2>&1; then
     rm "${DIGEST}" >/dev/null 2>&1
     exit_with_error 1 "AWS returned an error, log at ${LOG_FILE}"
 fi
