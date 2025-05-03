@@ -216,25 +216,25 @@ fi
 set +e
 read -r -d '' DIGEST << EndDigest
 {
-    "HostedZoneId": "${ZONE_ID}",
-    "ChangeBatch": {
-        "Comment": "${COMMENT}",
-        "Changes": [
+  "HostedZoneId": "${ZONE_ID}",
+  "ChangeBatch": {
+    "Comment": "${COMMENT}",
+    "Changes": [
+      {
+        "Action": "UPSERT",
+        "ResourceRecordSet": {
+          "Name": "${RECORD_SET}",
+          "Type": "${RECORD_TYPE}",
+          "ResourceRecords": [
             {
-                "Action": "UPSERT",
-                "ResourceRecordSet": {
-                "ResourceRecords": [
-                    {
-                    "Value": "${IP}"
-                    }
-                ],
-                "Name": "${RECORD_SET}",
-                "Type": "${RECORD_TYPE}",
-                "TTL": ${TTL}
-                }
+              "Value": "${IP}"
             }
-        ]
-    }
+          ],
+          "TTL": ${TTL}
+        }
+      }
+    ]
+  }
 }
 EndDigest
 set -e
