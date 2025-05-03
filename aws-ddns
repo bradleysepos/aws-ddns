@@ -46,7 +46,7 @@ function exit_with_error {
 
 # Arguments
 QUERY_REMOTE=false
-IP_PROVIDERS=('https://api.ipify.org' 'https://wtfismyip.com/text' 'https://icanhazip.com')
+IP_PROVIDERS=('https://ipv4.whatismyip.akamai.com' 'https://ipv4.text.myip.wtf' 'https://ipv4.icanhazip.com' 'https://api.ipify.org' 'https://ifconfig.co')
 CACHE_PREFIX="${HOME}/."
 COMMENT="${NAME} $(TZ=UTC date '+%Y-%m-%d-%H%M%S') UTC"
 PROFILE="default"
