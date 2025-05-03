@@ -15,7 +15,7 @@ Installation
 ------------
 
 1. Copy `aws-ddns` to a directory in your `PATH` such as `/usr/local/bin` and make it executable.
-2. Add your Hosted Zone ID and Record Set name (domain or subdomain) to `com.bradleysepos.aws-ddns.plist` 
+2. Add your Hosted Zone ID and Record Set name (domain or subdomain) to `com.bradleysepos.aws-ddns.plist`
 3. Copy the updated `com.bradleysepos.aws-ddns.plist` to `~/Library/LaunchAgents`.
 4. Open Terminal and load the Launch Agent:
 
