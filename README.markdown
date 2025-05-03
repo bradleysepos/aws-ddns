@@ -63,5 +63,5 @@ aws-ddns -h
 License
 -------
 
-Copyright 2021 Bradley Sepos  
+Copyright 2025 Bradley Sepos  
 Released under the MIT License. See [LICENSE](LICENSE) for details.
