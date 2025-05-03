@@ -1,5 +1,5 @@
 aws-ddns
-======
+========
 
 aws-ddns is a Bash script for rolling your own dynamic DNS solution on Amazon AWS Route 53.
 
@@ -8,7 +8,7 @@ Requirements
 ------------
 
 - OS X 10.9 Mavericks or later suggested (not tested on other operating systems)
-- [AWS Command Line Tools 1.8.2 or later](http://docs.aws.amazon.com/cli/latest/userguide/installing.html) (not tested on earlier versions)
+- [AWS Command Line Tools](https://docs.aws.amazon.com/cli/)
 
 
 Installation

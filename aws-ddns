@@ -210,7 +210,7 @@ fi
 set +e
 read -r -d '' DIGEST << EndDigest
 {
-    "HostedZoneId": "${ZONE_ID}", 
+    "HostedZoneId": "${ZONE_ID}",
     "ChangeBatch": {
         "Comment": "${COMMENT}",
         "Changes": [
