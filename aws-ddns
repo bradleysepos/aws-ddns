@@ -25,12 +25,12 @@ where:
    -h  display this help text
    -v  display version information
    -e  external IP address (default unset; use IP provider)
-   -f  query AWS (ignore local cache) and force update if external IP differs
-   -i  external IP address provider url(s) (must return plain text)
+   -f  ignore local cache and force update if external IP or TTL differs
+   -i  comma-separated list of plain text external IP address provider url(s)
    -l  local cache prefix (default ~/.aws-ddns)
-   -m  record set comment (default ${NAME} datetime UTC)
+   -m  record set change comment (default ${NAME} datetime UTC)
    -p  AWS CLI profile (default default)
-   -r  record type (default A)
+   -r  record type (default A; AAAA also supported)
    -t  time to live in seconds (default 300)"
 
 # Logs error message and exits
