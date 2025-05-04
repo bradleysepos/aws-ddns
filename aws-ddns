@@ -241,9 +241,12 @@ fi
 echo "${IP} ${TTL}" > "${CACHE_FILE}"
 
 # Trim log
-LOG_LINES=$(wc -l "${LOG_FILE}" | awk '{ print $1 }')
-if [[ "${LOG_LINES}" -gt 100 ]]; then
-    tail -n 100 "${LOG_FILE}" > "${LOG_FILE}"
+MAX_LOG_LINES=100
+LOG_LINES=$(wc -l < "${LOG_FILE}")
+if [[ "${LOG_LINES}" -gt "${MAX_LOG_LINES}" ]]; then
+    START_LINE=$((LOG_LINES - MAX_LOG_LINES))
+    sed -i.bak "1,${START_LINE}d" "${LOG_FILE}" >/dev/null 2>&1
+    rm -f "${LOG_FILE}.bak" >/dev/null 2>&1
 fi
 
 # Done
