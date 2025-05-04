@@ -46,7 +46,9 @@ function exit_with_error {
 
 # Arguments
 QUERY_REMOTE=false
-IP_PROVIDERS=('https://ipv4.whatismyip.akamai.com' 'https://ipv4.text.myip.wtf' 'https://ipv4.icanhazip.com' 'https://api.ipify.org' 'https://ifconfig.co')
+IPV4_PROVIDERS=('https://ipv4.whatismyip.akamai.com' 'https://ipv4.text.myip.wtf' 'https://ipv4.icanhazip.com' 'https://api.ipify.org' 'https://ifconfig.co')
+IPV6_PROVIDERS=('https://ipv6.whatismyip.akamai.com' 'https://ipv6.text.myip.wtf' 'https://ipv6.icanhazip.com' 'https://api6.ipify.org' 'https://ifconfig.co')
+IP_PROVIDERS=()
 CACHE_PREFIX="${HOME}/."
 COMMENT="${NAME} $(TZ=UTC date '+%Y-%m-%d-%H%M%S') UTC"
 PROFILE="default"
@@ -114,7 +116,7 @@ fi
 if [[ "${RECORD_SET}" == "" ]]; then
     exit_with_error 1 "Record set name not specified." true
 fi
-if [[ "${RECORD_TYPE}" != "A" ]]; then
+if [[ "${RECORD_TYPE}" != "A" ]] && [[ "${RECORD_TYPE}" != "AAAA" ]]; then
     exit_with_error 1 "Record type ${RECORD_TYPE} not implemented." true
 fi
 if ! echo "${TTL}" | grep -E '^[0-9]+$' >/dev/null 2>&1; then
@@ -126,10 +128,23 @@ if [[ "${RECORD_SET: -1}" != "." ]]; then
     RECORD_SET+="."
 fi
 
+# Set IP version and providers list
+IPV="4"
+if [[ "${RECORD_TYPE}" == "AAAA" ]]; then
+    IPV="6"
+fi
+if [[ "${#IP_PROVIDERS[@]}" -eq 0 ]]; then
+    if [[ "${IPV}" == "4" ]]; then
+        IP_PROVIDERS=("${IPV4_PROVIDERS[@]}")
+    else
+        IP_PROVIDERS=("${IPV6_PROVIDERS[@]}")
+    fi
+fi
+
 # Create/verify local cache
 CACHE_DIR="${CACHE_PREFIX}${NAME}/${ZONE_ID}/${RECORD_SET}"
-CACHE_FILE="${CACHE_DIR}/cache.txt"
-LOG_FILE="${CACHE_DIR}/aws.log"
+CACHE_FILE="${CACHE_DIR}/${RECORD_TYPE}.txt"
+LOG_FILE="${CACHE_DIR}/${RECORD_TYPE}.log"
 if [[ ! -d "${CACHE_DIR}" ]]; then
     mkdir -p "${CACHE_DIR}" >/dev/null 2>&1
 fi
@@ -152,9 +167,9 @@ fi
 IP=""
 for PROVIDER in "${IP_PROVIDERS[@]}"; do
     # Query provider
-    IP_TEMP=$(curl -s "${PROVIDER}" 2>/dev/null | head -n 1)
+    IP_TEMP=$(curl -"${IPV}" -s "${PROVIDER}" 2>/dev/null | head -n 1)
     # Check result
-    if [[ "${IP_TEMP}" =~ ^((([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])[.]){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))$ ]]; then
+    if [[ "${IPV}" == "4" ]] && [[ "${IP_TEMP}" =~ ^((([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])[.]){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))$ ]]; then
         # Exclude reserved ranges
         if [[ "${IP_TEMP}" =~ ^0[.] ]]                      \
             || [[ "${IP_TEMP}" =~ ^10[.] ]]                 \
@@ -177,6 +192,26 @@ for PROVIDER in "${IP_PROVIDERS[@]}"; do
             || [[ "${IP_TEMP}" =~ ^22[4-9][.] ]]            \
             || [[ "${IP_TEMP}" =~ ^2[3-4][0-9][.] ]]        \
             || [[ "${IP_TEMP}" =~ ^25[0-5][.] ]]
+        then
+            continue 2
+        fi
+        # IP seems valid
+        IP="${IP_TEMP}"
+        break
+    elif [[ "${IPV}" == "6" ]] && [[ "${IP_TEMP}" =~ ^[0-9a-f:.]+$ ]]; then
+        # Exclude reserved ranges
+        if [[ "${IP_TEMP}" =~ ^::1?$ ]] \
+            || [[ "${IP_TEMP}" =~ ^0{0,2}64:ff9b:0{0,3}1:.+$ ]]              \
+            || [[ "${IP_TEMP}" =~ ^0?100:.+$ ]]                        \
+            || [[ "${IP_TEMP}" =~ ^2001:(:|0{1,4}:.+)$ ]]                     \
+            || [[ "${IP_TEMP}" =~ ^2001:2[0-9a-f]:.+$ ]]                     \
+            || [[ "${IP_TEMP}" =~ ^2001:db8:.+$ ]]                     \
+            || [[ "${IP_TEMP}" =~ ^2002:.+$ ]]                     \
+            || [[ "${IP_TEMP}" =~ ^3fff:(:|0?fff:.+)$ ]]                \
+            || [[ "${IP_TEMP}" =~ ^5f00:.+$ ]]                         \
+            || [[ "${IP_TEMP}" =~ ^f([c-d]|f)[0-9a-f]{2}:.+$ ]]        \
+            || [[ "${IP_TEMP}" =~ ^fe80:(:|(0{1,4}:){3}.+)$ ]]  \
+            || [[ "${IP_TEMP}" =~ ^(.+:ffff:(0{1,4}:)?|0{0,2}64:ff9b::)([0-9a-f]{1,4}(:[0-9a-f]{1,4})?$|[0-9a-f]{4}$|((([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])))$ ]]
         then
             continue 2
         fi
