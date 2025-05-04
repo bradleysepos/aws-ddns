@@ -39,7 +39,7 @@ function exit_with_error {
     set +e
     ERROR="${2}"
     echo "${SELF_NAME}: ${ERROR}" >&2
-    syslog -s -l error "${SELF_NAME}: ${ERROR}" >/dev/null
+    syslog -s -l error "${SELF_NAME}: ${ERROR}" >/dev/null 2>&1 || :
     PRINT_HELP="${3:-false}"
     if [[ "${PRINT_HELP}" == true ]]; then
         echo -e "${HELP}"
