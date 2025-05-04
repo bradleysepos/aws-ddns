@@ -17,12 +17,14 @@ SELF_NAME_SPACING=$(for N in $(seq 1 "${#SELF_NAME}"); do echo -n " "; done)
 HELP="\
 usage: ${SELF_NAME} [-hv]
        ${SELF_NAME} [-f] hosted-zone-id record-set-name
-       ${SELF_NAME} [-f] [-i ip-provider[,...]] [-l local-cache-prefix]
-       ${SELF_NAME_SPACING} [-m comment] [-p profile] [-r record-type] [-t ttl]
+       ${SELF_NAME} [-f] [-e ip-address] [-i ip-provider[,...]]
+       ${SELF_NAME_SPACING} [-l local-cache-prefix] [-m comment] [-p profile]
+       ${SELF_NAME_SPACING} [-r record-type] [-t ttl]
        ${SELF_NAME_SPACING} hosted-zone-id record-set-name
 where:
    -h  display this help text
    -v  display version information
+   -e  external IP address (default unset; use IP provider)
    -f  query AWS (ignore local cache) and force update if external IP differs
    -i  external IP address provider url(s) (must return plain text)
    -l  local cache prefix (default ~/.aws-ddns)
@@ -49,13 +51,14 @@ QUERY_REMOTE=false
 IPV4_PROVIDERS=('https://ipv4.whatismyip.akamai.com' 'https://ipv4.text.myip.wtf' 'https://ipv4.icanhazip.com' 'https://api.ipify.org' 'https://ifconfig.co')
 IPV6_PROVIDERS=('https://ipv6.whatismyip.akamai.com' 'https://ipv6.text.myip.wtf' 'https://ipv6.icanhazip.com' 'https://api6.ipify.org' 'https://ifconfig.co')
 IP_PROVIDERS=()
+IP=""
 CACHE_PREFIX="${HOME}/."
 COMMENT="${NAME} $(TZ=UTC date '+%Y-%m-%d-%H%M%S') UTC"
 PROFILE="default"
 RECORD_TYPE="A"
 TTL="300"
 OPTIND=1
-while getopts ":hvfi:l:m:p:r:t:" OPT; do
+while getopts ":hvfe:i:l:m:p:r:t:" OPT; do
     case "${OPT}" in
         h)
             # Print help and exit
@@ -66,6 +69,10 @@ while getopts ":hvfi:l:m:p:r:t:" OPT; do
             # Print version and exit
             echo "${NAME} ${VERSION}"
             exit 0
+            ;;
+        e)
+            # IP address
+            IP="${OPTARG}"
             ;;
         f)
             # Force update if external IP differs from remote record (ignore local cache)
@@ -164,62 +171,63 @@ then
 fi
 
 # Get external IP address
-IP=""
-for PROVIDER in "${IP_PROVIDERS[@]}"; do
-    # Query provider
-    IP_TEMP=$(curl -"${IPV}" -s "${PROVIDER}" 2>/dev/null | head -n 1)
-    # Check result
-    if [[ "${IPV}" == "4" ]] && [[ "${IP_TEMP}" =~ ^((([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])[.]){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))$ ]]; then
-        # Exclude reserved ranges
-        if [[ "${IP_TEMP}" =~ ^0[.] ]]                      \
-            || [[ "${IP_TEMP}" =~ ^10[.] ]]                 \
-            || [[ "${IP_TEMP}" =~ ^100[.]6[4-9][.] ]]       \
-            || [[ "${IP_TEMP}" =~ ^100[.][7-9][0-9][.] ]]   \
-            || [[ "${IP_TEMP}" =~ ^100[.]1[0-1][0-9][.] ]]  \
-            || [[ "${IP_TEMP}" =~ ^100[.]12[0-7][.] ]]      \
-            || [[ "${IP_TEMP}" =~ ^127[.] ]]                \
-            || [[ "${IP_TEMP}" =~ ^169[.]254[.] ]]          \
-            || [[ "${IP_TEMP}" =~ ^172[.]1[6-9][.] ]]       \
-            || [[ "${IP_TEMP}" =~ ^172[.]2[0-9][.] ]]       \
-            || [[ "${IP_TEMP}" =~ ^172[.]3[0-1][.] ]]       \
-            || [[ "${IP_TEMP}" =~ ^192[.]0[.]2[.] ]]        \
-            || [[ "${IP_TEMP}" =~ ^192[.]88[.]99[.] ]]      \
-            || [[ "${IP_TEMP}" =~ ^192[.]168[.] ]]          \
-            || [[ "${IP_TEMP}" =~ ^198[.]18[.] ]]           \
-            || [[ "${IP_TEMP}" =~ ^198[.]19[.] ]]           \
-            || [[ "${IP_TEMP}" =~ ^198[.]51[.]100[.] ]]     \
-            || [[ "${IP_TEMP}" =~ ^203[.]0[.]113[.] ]]      \
-            || [[ "${IP_TEMP}" =~ ^22[4-9][.] ]]            \
-            || [[ "${IP_TEMP}" =~ ^2[3-4][0-9][.] ]]        \
-            || [[ "${IP_TEMP}" =~ ^25[0-5][.] ]]
-        then
-            continue 2
+if [[ "${IP}" == "" ]]; then
+    for PROVIDER in "${IP_PROVIDERS[@]}"; do
+        # Query provider
+        IP_TEMP=$(curl -"${IPV}" -s "${PROVIDER}" 2>/dev/null | head -n 1)
+        # Check result
+        if [[ "${IPV}" == "4" ]] && [[ "${IP_TEMP}" =~ ^((([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])[.]){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))$ ]]; then
+            # Exclude reserved ranges
+            if [[ "${IP_TEMP}" =~ ^0[.] ]]                      \
+                || [[ "${IP_TEMP}" =~ ^10[.] ]]                 \
+                || [[ "${IP_TEMP}" =~ ^100[.]6[4-9][.] ]]       \
+                || [[ "${IP_TEMP}" =~ ^100[.][7-9][0-9][.] ]]   \
+                || [[ "${IP_TEMP}" =~ ^100[.]1[0-1][0-9][.] ]]  \
+                || [[ "${IP_TEMP}" =~ ^100[.]12[0-7][.] ]]      \
+                || [[ "${IP_TEMP}" =~ ^127[.] ]]                \
+                || [[ "${IP_TEMP}" =~ ^169[.]254[.] ]]          \
+                || [[ "${IP_TEMP}" =~ ^172[.]1[6-9][.] ]]       \
+                || [[ "${IP_TEMP}" =~ ^172[.]2[0-9][.] ]]       \
+                || [[ "${IP_TEMP}" =~ ^172[.]3[0-1][.] ]]       \
+                || [[ "${IP_TEMP}" =~ ^192[.]0[.]2[.] ]]        \
+                || [[ "${IP_TEMP}" =~ ^192[.]88[.]99[.] ]]      \
+                || [[ "${IP_TEMP}" =~ ^192[.]168[.] ]]          \
+                || [[ "${IP_TEMP}" =~ ^198[.]18[.] ]]           \
+                || [[ "${IP_TEMP}" =~ ^198[.]19[.] ]]           \
+                || [[ "${IP_TEMP}" =~ ^198[.]51[.]100[.] ]]     \
+                || [[ "${IP_TEMP}" =~ ^203[.]0[.]113[.] ]]      \
+                || [[ "${IP_TEMP}" =~ ^22[4-9][.] ]]            \
+                || [[ "${IP_TEMP}" =~ ^2[3-4][0-9][.] ]]        \
+                || [[ "${IP_TEMP}" =~ ^25[0-5][.] ]]
+            then
+                continue 2
+            fi
+            # IP seems valid
+            IP="${IP_TEMP}"
+            break
+        elif [[ "${IPV}" == "6" ]] && [[ "${IP_TEMP}" =~ ^[0-9a-f:.]+$ ]]; then
+            # Exclude reserved ranges
+            if [[ "${IP_TEMP}" =~ ^::1?$ ]] \
+                || [[ "${IP_TEMP}" =~ ^0{0,2}64:ff9b:0{0,3}1:.+$ ]]              \
+                || [[ "${IP_TEMP}" =~ ^0?100:.+$ ]]                        \
+                || [[ "${IP_TEMP}" =~ ^2001:(:|0{1,4}:.+)$ ]]                     \
+                || [[ "${IP_TEMP}" =~ ^2001:2[0-9a-f]:.+$ ]]                     \
+                || [[ "${IP_TEMP}" =~ ^2001:db8:.+$ ]]                     \
+                || [[ "${IP_TEMP}" =~ ^2002:.+$ ]]                     \
+                || [[ "${IP_TEMP}" =~ ^3fff:(:|0?fff:.+)$ ]]                \
+                || [[ "${IP_TEMP}" =~ ^5f00:.+$ ]]                         \
+                || [[ "${IP_TEMP}" =~ ^f([c-d]|f)[0-9a-f]{2}:.+$ ]]        \
+                || [[ "${IP_TEMP}" =~ ^fe80:(:|(0{1,4}:){3}.+)$ ]]  \
+                || [[ "${IP_TEMP}" =~ ^(.+:ffff:(0{1,4}:)?|0{0,2}64:ff9b::)([0-9a-f]{1,4}(:[0-9a-f]{1,4})?$|[0-9a-f]{4}$|((([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])))$ ]]
+            then
+                continue 2
+            fi
+            # IP seems valid
+            IP="${IP_TEMP}"
+            break
         fi
-        # IP seems valid
-        IP="${IP_TEMP}"
-        break
-    elif [[ "${IPV}" == "6" ]] && [[ "${IP_TEMP}" =~ ^[0-9a-f:.]+$ ]]; then
-        # Exclude reserved ranges
-        if [[ "${IP_TEMP}" =~ ^::1?$ ]] \
-            || [[ "${IP_TEMP}" =~ ^0{0,2}64:ff9b:0{0,3}1:.+$ ]]              \
-            || [[ "${IP_TEMP}" =~ ^0?100:.+$ ]]                        \
-            || [[ "${IP_TEMP}" =~ ^2001:(:|0{1,4}:.+)$ ]]                     \
-            || [[ "${IP_TEMP}" =~ ^2001:2[0-9a-f]:.+$ ]]                     \
-            || [[ "${IP_TEMP}" =~ ^2001:db8:.+$ ]]                     \
-            || [[ "${IP_TEMP}" =~ ^2002:.+$ ]]                     \
-            || [[ "${IP_TEMP}" =~ ^3fff:(:|0?fff:.+)$ ]]                \
-            || [[ "${IP_TEMP}" =~ ^5f00:.+$ ]]                         \
-            || [[ "${IP_TEMP}" =~ ^f([c-d]|f)[0-9a-f]{2}:.+$ ]]        \
-            || [[ "${IP_TEMP}" =~ ^fe80:(:|(0{1,4}:){3}.+)$ ]]  \
-            || [[ "${IP_TEMP}" =~ ^(.+:ffff:(0{1,4}:)?|0{0,2}64:ff9b::)([0-9a-f]{1,4}(:[0-9a-f]{1,4})?$|[0-9a-f]{4}$|((([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])))$ ]]
-        then
-            continue 2
-        fi
-        # IP seems valid
-        IP="${IP_TEMP}"
-        break
-    fi
-done
+    done
+fi
 if [[ "${IP}" == "" ]]; then
     exit_with_error 1 "Unable to determine external IP address."
 fi
