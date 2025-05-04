@@ -75,7 +75,7 @@ while getopts ":hvfe:i:l:m:p:r:t:" OPT; do
             IP="${OPTARG}"
             ;;
         f)
-            # Force update if external IP differs from remote record (ignore local cache)
+            # Ignore local cache and force update if external IP or TTL differs from remote record
             QUERY_REMOTE=true
             ;;
         i)
@@ -87,7 +87,7 @@ while getopts ":hvfe:i:l:m:p:r:t:" OPT; do
             CACHE_PREFIX="${OPTARG}"
             ;;
         m)
-            # Record set comment
+            # Record set change comment
             COMMENT="${OPTARG}"
             ;;
         p)
@@ -95,11 +95,11 @@ while getopts ":hvfe:i:l:m:p:r:t:" OPT; do
             PROFILE="${OPTARG}"
             ;;
         r)
-            # IP providers
+            # Record type
             RECORD_TYPE="${OPTARG}"
             ;;
         t)
-            # IP providers
+            # Time to live
             TTL="${OPTARG}"
             ;;
         :)
