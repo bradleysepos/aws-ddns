@@ -3,16 +3,18 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-        <string>com.bradleysepos.aws-ddns</string>
+    <string>com.bradleysepos.aws-ddns</string>
     <key>ProgramArguments</key>
     <array>
         <string>/usr/local/bin/aws-ddns</string>
-        <string>YOUR-HOSTED-ZONE-ID</string>
-        <string>your.domain.tld.</string>
+        <string>-p</string>
+        <string>default</string>
+        <string>hosted-zone-id</string>
+        <string>record-name</string>
     </array>
     <key>RunAtLoad</key>
-        <true/>
+    <true/>
     <key>StartInterval</key>
-        <integer>300</integer>
+    <integer>300</integer>
 </dict>
 </plist>
