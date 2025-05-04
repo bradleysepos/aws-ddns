@@ -16,11 +16,11 @@ SELF_NAME=$(basename "${SELF}")
 SELF_NAME_SPACING=$(for N in $(seq 1 "${#SELF_NAME}"); do echo -n " "; done)
 HELP="\
 usage: ${SELF_NAME} [-hv]
-       ${SELF_NAME} [-f] hosted-zone-id record-set-name
+       ${SELF_NAME} [-f] hosted-zone-id record-name
        ${SELF_NAME} [-f] [-e ip-address] [-i ip-provider[,...]]
        ${SELF_NAME_SPACING} [-l local-cache-prefix] [-m comment] [-p profile]
        ${SELF_NAME_SPACING} [-r record-type] [-t ttl]
-       ${SELF_NAME_SPACING} hosted-zone-id record-set-name
+       ${SELF_NAME_SPACING} hosted-zone-id record-name
 where:
    -h  display this help text
    -v  display version information
@@ -114,14 +114,14 @@ while getopts ":hvfe:i:l:m:p:r:t:" OPT; do
 done
 shift $((${OPTIND} - 1))
 ZONE_ID="${1:-}"
-RECORD_SET="${2:-}"
+RECORD_NAME="${2:-}"
 
 # Sanity checks
 if [[ "${ZONE_ID}" == "" ]]; then
     exit_with_error 1 "Hosted Zone ID not specified." true
 fi
-if [[ "${RECORD_SET}" == "" ]]; then
-    exit_with_error 1 "Record set name not specified." true
+if [[ "${RECORD_NAME}" == "" ]]; then
+    exit_with_error 1 "Record name not specified." true
 fi
 if [[ "${RECORD_TYPE}" != "A" ]] && [[ "${RECORD_TYPE}" != "AAAA" ]]; then
     exit_with_error 1 "Record type ${RECORD_TYPE} not implemented." true
@@ -130,9 +130,9 @@ if ! echo "${TTL}" | grep -E '^[0-9]+$' >/dev/null 2>&1; then
     exit_with_error 1 "TTL must be a number." true
 fi
 
-# Sanitize record set name
-if [[ "${RECORD_SET: -1}" != "." ]]; then
-    RECORD_SET+="."
+# Sanitize record name
+if [[ "${RECORD_NAME: -1}" != "." ]]; then
+    RECORD_NAME+="."
 fi
 
 # Set IP version and providers list
@@ -149,7 +149,7 @@ if [[ "${#IP_PROVIDERS[@]}" -eq 0 ]]; then
 fi
 
 # Create/verify local cache
-CACHE_DIR="${CACHE_PREFIX}${NAME}/${ZONE_ID}/${RECORD_SET}"
+CACHE_DIR="${CACHE_PREFIX}${NAME}/${ZONE_ID}/${RECORD_NAME}"
 CACHE_FILE="${CACHE_DIR}/${RECORD_TYPE}.txt"
 LOG_FILE="${CACHE_DIR}/${RECORD_TYPE}.log"
 if [[ ! -d "${CACHE_DIR}" ]]; then
@@ -236,7 +236,7 @@ fi
 IP_CURRENT=""
 TTL_CURRENT=""
 if [[ "${QUERY_REMOTE}" == true ]]; then
-    RESULT=$(aws --profile="${PROFILE}" route53 list-resource-record-sets --hosted-zone "${ZONE_ID}" --starting-token "${RECORD_SET}" --max-items 1 --output text 2>/dev/null)
+    RESULT=$(aws --profile="${PROFILE}" route53 list-resource-record-sets --hosted-zone "${ZONE_ID}" --starting-token "${RECORD_NAME}" --max-items 1 --output text 2>/dev/null)
     if [[ "$?" -eq 0 ]]; then
         IP_CURRENT=$(echo "${RESULT}" | grep -E '^RESOURCERECORDS[^A-Z]' | awk '{ print $2 }' 2>&1)
         TTL_CURRENT=$(echo "${RESULT}" | grep -E '^RESOURCERECORDSETS' | awk '{ print $3 }' 2>&1)
@@ -274,7 +274,7 @@ read -r -d '' DIGEST << EndDigest
       {
         "Action": "UPSERT",
         "ResourceRecordSet": {
-          "Name": "${RECORD_SET}",
+          "Name": "${RECORD_NAME}",
           "Type": "${RECORD_TYPE}",
           "ResourceRecords": [
             {
