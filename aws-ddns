@@ -292,7 +292,6 @@ set -e
 
 # Push changes
 if ! aws --profile="${PROFILE}" route53 change-resource-record-sets --cli-input-json "${DIGEST}" --output text >> "${LOG_FILE}" 2>&1; then
-    rm "${DIGEST}" >/dev/null 2>&1
     exit_with_error 1 "AWS returned an error, log at ${LOG_FILE}"
 fi
 echo "${IP} ${TTL}" > "${CACHE_FILE}"
