@@ -6,7 +6,7 @@
 
 NAME="aws-ddns"
 RDNN="com.bradleysepos.${NAME}"
-VERSION="1.0.1"
+VERSION="1.1.0"
 
 set -e
 set -u
