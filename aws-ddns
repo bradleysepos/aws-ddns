@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # aws-ddns - dynamic DNS for Amazon AWS Route 53
 #
 # Copyright 2025 Bradley Sepos
