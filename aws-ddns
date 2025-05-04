@@ -17,13 +17,14 @@ SELF_NAME_SPACING=$(for N in $(seq 1 "${#SELF_NAME}"); do echo -n " "; done)
 HELP="\
 usage: ${SELF_NAME} [-hv]
        ${SELF_NAME} [-f] hosted-zone-id record-name
-       ${SELF_NAME} [-f] [-e ip-address] [-i ip-provider[,...]]
+       ${SELF_NAME} [-f] [-c poll_count] [-e ip-address] [-i ip-provider[,...]]
        ${SELF_NAME_SPACING} [-l local-cache-prefix] [-m comment] [-p profile]
        ${SELF_NAME_SPACING} [-r record-type] [-t ttl]
        ${SELF_NAME_SPACING} hosted-zone-id record-name
 where:
    -h  display this help text
    -v  display version information
+   -c  poll change status every 10 seconds this many times (default 0)
    -e  external IP address (default unset; use IP provider)
    -f  ignore local cache and force update if external IP or TTL differs
    -i  comma-separated list of plain text external IP address provider url(s)
@@ -57,8 +58,9 @@ COMMENT="${NAME} $(TZ=UTC date '+%Y-%m-%d-%H%M%S') UTC"
 PROFILE="default"
 RECORD_TYPE="A"
 TTL="300"
+POLL_COUNT="0"
 OPTIND=1
-while getopts ":hvfe:i:l:m:p:r:t:" OPT; do
+while getopts ":hvfc:e:i:l:m:p:r:t:" OPT; do
     case "${OPT}" in
         h)
             # Print help and exit
@@ -69,6 +71,10 @@ while getopts ":hvfe:i:l:m:p:r:t:" OPT; do
             # Print version and exit
             echo "${NAME} ${VERSION}"
             exit 0
+            ;;
+        c)
+            # Poll change status count
+            POLL_COUNT="${OPTARG}"
             ;;
         e)
             # IP address
@@ -291,9 +297,39 @@ EndDigest
 set -e
 
 # Push changes
-if ! aws --profile="${PROFILE}" route53 change-resource-record-sets --cli-input-json "${DIGEST}" --output text >> "${LOG_FILE}" 2>&1; then
-    exit_with_error 1 "AWS returned an error, log at ${LOG_FILE}"
+CHANGE_ID=""
+CHANGE_STATUS=""
+RESULT=$(aws --profile="${PROFILE}" route53 change-resource-record-sets --cli-input-json "${DIGEST}" --output text >> >(tee -a "${LOG_FILE}") 2>> "${LOG_FILE}")
+if [[ "$?" -eq 0 ]]; then
+    RESULT_PARTIAL=$(echo "${RESULT}" | grep -Eo '/change/[^[:space:]]+[[:space:]]+[A-Z]+' 2>/dev/null)
+    CHANGE_ID=$(echo "${RESULT_PARTIAL}" | awk '{ print $1 }' 2>/dev/null)
+    CHANGE_STATUS=$(echo "${RESULT_PARTIAL}" | awk '{ print $2 }' 2>/dev/null)
+    if [[ ! "${CHANGE_ID}" =~ ^\/change\/.+ ]] || [[ "${CHANGE_STATUS}" == "" ]]; then
+        exit_with_error 1 "Unable to parse AWS response."
+    fi
+else
+    exit_with_error 1 "AWS returned an error, log exists at ${LOG_FILE}"
 fi
+
+# Poll and log change status
+COUNT=0
+RESULT=""
+while [[ "${CHANGE_STATUS}" != "INSYNC" ]] && [[ "${COUNT}" -lt "${POLL_COUNT}" ]]; do
+    sleep 10
+    COUNT=$((COUNT + 1))
+    RESULT=$(aws --profile="${PROFILE}" route53 get-change --id "${CHANGE_ID}" --output text >> >(tee -a "${LOG_FILE}") 2>> "${LOG_FILE}")
+    if [[ "$?" -eq 0 ]]; then
+        RESULT_PARTIAL=$(echo "${RESULT}" | grep -Eo '/change/[^[:space:]]+[[:space:]]+[A-Z]+' 2>/dev/null)
+        CHANGE_STATUS=$(echo "${RESULT_PARTIAL}" | awk '{ print $2 }' 2>/dev/null)
+        if [[ "${CHANGE_STATUS}" == "" ]]; then
+            exit_with_error 1 "Unable to parse AWS response."
+        fi
+    else
+        exit_with_error 1 "AWS returned an error, log exists at ${LOG_FILE}"
+    fi
+done
+
+# Store IP address and TTL in local cache
 echo "${IP} ${TTL}" > "${CACHE_FILE}"
 
 # Trim log
