@@ -29,7 +29,7 @@ where:
    -f  ignore local cache and force update if external IP or TTL differs
    -i  comma-separated list of plain text external IP address provider url(s)
    -l  local cache prefix (default ~/.aws-ddns)
-   -m  record set change comment (default ${NAME} datetime UTC)
+   -m  record set change comment (default ${NAME})
    -p  AWS CLI profile (default default)
    -r  record type (default A; AAAA also supported)
    -t  time to live in seconds (default 300)"
@@ -54,7 +54,7 @@ IPV6_PROVIDERS=('https://ipv6.whatismyip.akamai.com' 'https://ipv6.text.myip.wtf
 IP_PROVIDERS=()
 IP=""
 CACHE_PREFIX="${HOME}/."
-COMMENT="${NAME} $(TZ=UTC date '+%Y-%m-%d-%H%M%S') UTC"
+COMMENT="${NAME}"
 PROFILE="default"
 RECORD_TYPE="A"
 TTL="300"
